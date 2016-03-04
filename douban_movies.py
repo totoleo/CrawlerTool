@@ -28,3 +28,12 @@ from openpyxl import Workbook
 #     img_f = open(image_path + filename, "wb")
 #     img_f.write(image_data)
 #     img_f.close()
+
+
+"""
+http://www.douban.com/j/tag/items?start=9&limit=6&topic_id=256&topic_name=2014&mod=movie
+
+&topic_id=73160&topic_name=2016
+&topic_id=65330&topic_name=2015
+
+"""

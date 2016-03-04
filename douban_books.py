@@ -46,7 +46,7 @@ class DoubanBooksCrawler(object):
              'Accept-Encoding': 'gzip', 'referer': referer, 'x-requested-with': 'XMLHttpRequest'}
         ]
 
-        url = 'https://www.douban.com/j/tag/items?start=0&limit=1000000&topic_id=' + topic_id + '&topic_name=' + topic_name + '&mod=book'
+        url = 'http://www.douban.com/j/tag/items?start=0&limit=1000000&topic_id=' + topic_id + '&topic_name=' + topic_name + '&mod=book'
 
         book_list = []
 
@@ -156,7 +156,7 @@ if __name__ == '__main__':
 
 """
 
-https://www.douban.com/j/tag/items?start=0&limit=17592&topic_id=254&topic_name=%E9%9A%8F%E7%AC%94&mod=book
+http://www.douban.com/j/tag/items?start=0&limit=17592&topic_id=254&topic_name=%E9%9A%8F%E7%AC%94&mod=book
 
 limit=200959&topic_id=60456&topic_name=文学
 limit=32131&topic_id=62597&topic_name=外国文学
