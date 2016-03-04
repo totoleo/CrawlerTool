@@ -1,9 +1,11 @@
-# spidertool
+# CrawlerTool
 
-### 基本
-Python3 需要安装的模块 beautifulsoup4, numpy, Workbook
+### 使用
+版本: Python3
 
-使用urllib: urllib2 has been moved to urllib.request in python3
+需要安装的模块: beautifulsoup4, numpy, Workbook
+
+另外使用了urllib: urllib2 has been moved to urllib.request in python3
 
 为什么没用requests:
 
