@@ -51,3 +51,23 @@ also, [requests has poor performance streaming large binary responses](https://g
 另外requests支持https很好用, 只是https要ssl，效率只能比http低一些, 目前暂时未用到; requests也支持GET/POST/PUT/DELETE, 比urllib全面, 某些场合下比urllib有用, 比如RESTful API; 当然, 论开发效率, 请求复杂的话，果断是requests开发效率高.
 
 最后一点, urllib是基于httplib封装, 偶尔会抛出connection reset by peer异常, 换httplib2貌似就不出现问题了, 这点留待验证, httplib2效率似乎比httplib差?
+
+
+
+
+### 其他
+
+下载图片时gzip碰到一个bug:
+
+      File "/Users/hipponensis/myprojects/crawlertool/douban_movies.py", line 136, in crawler_image
+        image_data = g.read()
+      File "/Users/hipponensis/.pyenv/versions/3.5.1/lib/python3.5/gzip.py", line 274, in read
+        return self._buffer.read(size)
+      File "/Users/hipponensis/.pyenv/versions/3.5.1/lib/python3.5/gzip.py", line 461, in read
+        if not self._read_gzip_header():
+      File "/Users/hipponensis/.pyenv/versions/3.5.1/lib/python3.5/gzip.py", line 409, in _read_gzip_header
+        raise OSError('Not a gzipped file (%r)' % magic)
+
+看了[这个](http://stackoverflow.com/questions/4928560/how-can-i-work-with-gzip-files-which-contain-extra-data), 了解到原因是内置模块设计不合理.
+
+又看了[这个](http://qa.helplib.com/452430), 使用shutil.copyfileobj问题解决, 但数据未压缩比较耗流量.
