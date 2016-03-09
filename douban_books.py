@@ -18,7 +18,7 @@ from openpyxl import Workbook
 class DoubanBooksCrawler(object):
 
     def __init__(self, topics):
-        self.topics =topics
+        self.topics = topics
         self.headers = [
             {'User-Agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:34.0) Gecko/20100101 Firefox/34.0', 'Accept-Encoding': 'gzip'},
             {'User-Agent': 'Mozilla/5.0 (Windows; U; Windows NT 6.1; en-US; rv:1.9.1.6) Gecko/20091201 Firefox/3.5.6', 'Accept-Encoding': 'gzip'},
@@ -27,7 +27,6 @@ class DoubanBooksCrawler(object):
             {'User-Agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:40.0) Gecko/20100101 Firefox/40.0', 'Accept-Encoding': 'gzip'},
             {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Ubuntu Chromium/44.0.2403.89 Chrome/44.0.2403.89 Safari/537.36', 'Accept-Encoding': 'gzip'}
         ]
-
 
     def crawler(self, topic_id, topic_name):
         url = 'http://www.douban.com/j/tag/items?start=0&limit=1000000&topic_id=' + topic_id + '&topic_name=' + topic_name + '&mod=book'
@@ -41,7 +40,7 @@ class DoubanBooksCrawler(object):
                 source_code = g.read()
             except:
                 source_code = resp.read()
-            source_code = eval(source_code.decode('utf-8'))
+            source_code = eval(source_code.decode('utf-8', 'ignore'))
             plain_text = str(source_code['html'])
             total = int(source_code['total'])
             plain_text = plain_text.replace('\\', '')
@@ -53,7 +52,7 @@ class DoubanBooksCrawler(object):
         list_info = re.split(r'<dl>', plain_text)[1:]
 
         if list_info is None or len(list_info) <= 1:
-            print(list_soup)
+            print(list_info)
             sys.exit(0)
 
         for book_info in list_info:
@@ -125,6 +124,7 @@ class DoubanBooksCrawler(object):
         wb.save(save_path)
 
 if __name__ == '__main__':
+    DoubanBooksCrawler([['71843', '工具书'], ['71840', '教材']]).run()
     DoubanBooksCrawler([['60494', '科学'], ['62726', '科普'], ['60512', '科技'], ['62672', '数学'], ['62732', '算法'], ['62155', '编程'], ['60461', '程序'], ['62733', 'web'], ['62737', '通信'], ['60502', '互联网'], ['62739', '神经网络'], ['62738', '交互'], ['62730', '交互设计'], ['62731', '用户体验'], ['62735', 'UE'], ['62736', 'UCD']]).run()
     DoubanBooksCrawler([['61431', '经济'], ['62713', '经济学'], ['62724', '企业史'], ['62717', '商业'], ['61640', '管理'], ['62719', '营销'], ['60497', '创业'], ['61432', '金融'], ['60493', '投资'], ['139', '理财'], ['210', '股票'], ['62722', '广告'], ['62725', '策划']]).run()
     DoubanBooksCrawler([['61258', '人生'], ['61469', '生活'], ['67703', '思维'], ['218', '情感'], ['133', '心理'], ['60418', '心理学'], ['62212', '个人管理'], ['62711', '人际关系'], ['260', '职场'], ['60521', '励志'], ['60487', '成长'], ['61474', '教育'], ['61554', '女性'], ['60919', '两性'], ['216', '健康'], ['62704', '灵修'], ['61204', '养生'], ['60465', '美食'], ['273', '旅行'], ['62712', '自助游'], ['60534', '家居'], ['95', '手工']]).run()
@@ -132,8 +132,7 @@ if __name__ == '__main__':
     DoubanBooksCrawler([['60501', '文化'], ['60489', '历史'], ['62677', '中国历史'], ['62689', '近代史'], ['62690', '考古'], ['60663', '人文'], ['62376', '传记'], ['62674', '回忆录'], ['62667', '政治'], ['62673', '政治学'], ['60552', '宗教'], ['61608', '哲学'], ['62675', '思想'], ['62072', '国学'], ['62668', '社会'], ['62664', '社会学'], ['63999', '人类学']]).run()
     DoubanBooksCrawler([['255', '小说'], ['60454', '科幻'], ['62636', '奇幻'], ['62630', '武侠'], ['62625', '推理'], ['60979', '悬疑'], ['60443', '爱情'], ['61527', '青春'], ['62627', '言情'], ['62640', '网络小说'], ['62644', '轻小说'], ['62641', '穿越'], ['60918', '耽美'], ['60429', '漫画'], ['98', '绘本']]).run()
     DoubanBooksCrawler([['60456', '文学'], ['62597', '外国文学'], ['62600', '中国文学'], ['62612', '古典文学'], ['62358', '经典'], ['62613', '名著'], ['254', '随笔'], ['60509', '散文'], ['61504', '诗歌'], ['62618', '诗词'], ['61747', '杂文'], ['60519', '游记']]).run()
-    DoubanBooksCrawler([['71843', '工具书'], ['71840', '教材']]).run()
-
+    # 补 ['65403', '计算机']
 
 
 """
