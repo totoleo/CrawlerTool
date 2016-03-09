@@ -3,6 +3,7 @@ __author__ = 'hipponensis'
 
 """年度: 电影名, 评分, 评价人数, 制片地区/类型/上映年份/导演/主演, 链接, 前5/10/20张图片下载"""
 
+import os
 import sys
 import time
 import urllib.request
@@ -85,7 +86,8 @@ class DoubanMoviesCrawler(object):
             else:
                 limit = 0
             movie_list.append([title, rating, votes, desc, movie_url])
-            self.crawler_images(movie_url, title, limit)
+            if not self.exist_file('images/movies', title + '1.jpg'):
+                self.crawler_images(movie_url, title, limit)
         return movie_list
     
     def crawler_votes(self, movie_url):
@@ -175,6 +177,12 @@ class DoubanMoviesCrawler(object):
             save_path += ('-' + tags[i])
         save_path += '.xlsx'
         wb.save(save_path)
+
+    def exist_file(self, search_path, filename):
+        candidate = os.path.join(search_path, filename)
+        if os.path.isfile(candidate):
+            return 'yes'
+        return None
 
 if __name__ == '__main__':
     # DoubanMoviesCrawler([['76168', '吉濑美智子']]).run()
