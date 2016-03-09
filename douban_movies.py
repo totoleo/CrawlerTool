@@ -145,7 +145,7 @@ class DoubanMoviesCrawler(object):
             with open('images/movies/' + image_name, 'wb') as out_file:
                 shutil.copyfileobj(response.raw, out_file)
             del response
-        except (urllib.error.HTTPError, urllib.error.URLError) as e:
+        except (requests.exceptions.HTTPError, requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
             print(e, image_url)
 
     def run(self):

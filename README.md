@@ -3,7 +3,7 @@
 ### 使用
 版本: Python3
 
-需要安装的模块: beautifulsoup4, numpy, Workbook
+需要安装的模块: beautifulsoup4, numpy, Workbook, requests
 
 另外使用了urllib: urllib2 has been moved to urllib.request in python3
 
