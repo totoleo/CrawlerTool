@@ -21,7 +21,7 @@
 
 1. url合规化处理、有效判重
 
-2. urllib打开网页, 下载文件。urllib2 has been moved to urllib.request in python3。urllib是基于httplib封装, 偶尔会抛出connection reset by peer异常, 换httplib2貌似就不出现问题了, 这点留待验证。httplib2效率似乎比httplib差。另外发现了一个PyCURL似乎效率更高。
+2. urllib打开网页, 下载文件。urllib2 has been moved to urllib.request in python3。The urlparse module is renamed to urllib.parse in Python 3。urllib是基于httplib封装, 偶尔会抛出connection reset by peer异常, 换httplib2貌似就不出现问题了, 这点留待验证。httplib2效率似乎比httplib差。另外发现了一个PyCURL似乎效率更高。
 
 3. requests支持提交GET/POST/PUT/DELETE各种类型的请求(写API方便), 支持重定向, cookies等, 也支持https, 只是https要ssl, 效率只能比http低一些。获取单个页面的话, urllib 和 requests(基于urllib3) 没什么区别。请求复杂的话, 果断是requests开发效率高, 但如果考虑异步I/O, requests缺陷就是直接使用不能异步调用, requests版本是urllib3的封装, urllib3默认是不开启keepalive长连接的, 而且requests爬取大文件比较慢, [Very slow read of large files compared to many other modules/binaries (e.g. urllib/curl/wget) ](https://github.com/kennethreitz/requests/issues/2745), 以及also, [requests has poor performance streaming large binary responses](https://github.com/kennethreitz/requests/issues/2371)。
 
