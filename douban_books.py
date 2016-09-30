@@ -13,6 +13,7 @@ import numpy as np
 import re
 from bs4 import BeautifulSoup
 from openpyxl import Workbook
+from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
 
 
 class DoubanBooksCrawler(object):
@@ -29,7 +30,7 @@ class DoubanBooksCrawler(object):
         ]
 
     def crawler(self, topic_id, topic_name):
-        url = 'http://www.douban.com/j/tag/items?start=0&limit=1000000&topic_id=' + topic_id + '&topic_name=' + topic_name + '&mod=book'
+        url = 'http://www.douban.com/j/tag/items?start=0&limit=500&topic_id=' + topic_id + '&topic_name=' + topic_name + '&mod=book'
         book_list = []
         try:
             randhds = self.headers[np.random.randint(0, len(self.headers)-1)]
@@ -46,18 +47,18 @@ class DoubanBooksCrawler(object):
             plain_text = plain_text.replace('\\', '')
             plain_text = plain_text.replace('\n', '')
         except (urllib.error.HTTPError, urllib.error.URLError) as e:
-            print(e)
+            print(e, url)
             plain_text = ''
+            total = 0
 
         list_info = re.split(r'<dl>', plain_text)[1:]
 
-        if list_info is None or len(list_info) <= 1:
-            print(list_info)
-            sys.exit(0)
+        if list_info is None:
+            print('no result', url)
 
         for book_info in list_info:
             soup = BeautifulSoup(book_info, 'html.parser')
-            book_url = soup.find('a').get('href')
+            book_url = soup.find('a').get('href').replace('https', 'http')
             title = soup.find('a', class_="title").get_text()
             desc = soup.find('div', class_="desc").get_text()
             desc = desc.strip(' ')
@@ -75,6 +76,56 @@ class DoubanBooksCrawler(object):
             except:
                 votes = '0'
             book_list.append([title, rating, votes, desc, book_url])
+
+        if total >= 500:
+            for i in range(1, int(total/500) + 1):
+                time.sleep(np.random.rand()*5)
+                url = 'http://www.douban.com/j/tag/items?start=' + str(i * 500) + '&limit=500&topic_id=' + topic_id + '&topic_name=' + topic_name + '&mod=book'
+                try:
+                    randhds = self.headers[np.random.randint(0, len(self.headers)-1)]
+                    req = urllib.request.Request(url, headers=randhds)
+                    resp = urllib.request.urlopen(req)
+                    try:
+                        g = gzip.GzipFile(mode="rb", fileobj=resp)
+                        source_code = g.read()
+                    except:
+                        source_code = resp.read()
+                    if '{' in source_code.decode('utf-8', 'ignore'):
+                        source_code = eval(source_code.decode('utf-8', 'ignore'))
+                    else:
+                        source_code = eval('{"' + source_code.decode('utf-8', 'ignore'))
+                    plain_text = str(source_code['html'])
+                    plain_text = plain_text.replace('\\', '')
+                    plain_text = plain_text.replace('\n', '')
+                except (urllib.error.HTTPError, urllib.error.URLError) as e:
+                    print(e, url)
+                    plain_text = ''
+
+                list_info = re.split(r'<dl>', plain_text)[1:]
+
+                if list_info is None:
+                    print('no result', url)
+
+                for book_info in list_info:
+                    soup = BeautifulSoup(book_info, 'html.parser')
+                    book_url = soup.find('a').get('href').replace('https', 'http')
+                    title = soup.find('a', class_="title").get_text()
+                    desc = soup.find('div', class_="desc").get_text()
+                    desc = desc.strip(' ')
+                    desc = desc.strip('\n')
+                    try:
+                        rating = soup.find('span', class_="rating_nums").get_text()
+                    except:
+                        rating = '0.0'
+                    try:
+                        if rating != '0.0':
+                            votes = self.crawler_votes(book_url)
+                            votes = votes.replace('\\xe4\\xba\\xba\\xe8\\xaf\\x84\\xe4\\xbb\\xb7', '')
+                        else:
+                            votes = '0'
+                    except:
+                        votes = '0'
+                    book_list.append([title, rating, votes, desc, book_url])
         return book_list
 
     def crawler_votes(self, book_url):
@@ -114,9 +165,20 @@ class DoubanBooksCrawler(object):
         for i in range(len(tags)):
             ws[i].append(['序号', '书名', '评分', '评价人数', '作者/译者/出版社/出版时间/价格', '链接'])
             count = 1
-            for book_list in results[i]:
-                ws[i].append([count, book_list[0], float(book_list[1]), int(book_list[2]), book_list[3], book_list[4]])
-                count += 1
+            for booklist in results[i]:
+                try:
+                    book_list = []
+                    for each in booklist:
+                        each = ILLEGAL_CHARACTERS_RE.sub(r'', each)
+                        book_list.append(each)
+                    if book_list:
+                        ws[i].append([count, book_list[0], float(book_list[1]), int(book_list[2]), book_list[3], book_list[4]])
+                        count += 1
+                    else:
+                        print('Fail to save i:', i, book_list)
+                except:
+                    print('Fail to save i:', i, booklist)
+                    pass
         save_path = 'book_lists'
         for i in range(len(tags)):
             save_path += ('-' + tags[i])
@@ -125,14 +187,13 @@ class DoubanBooksCrawler(object):
 
 if __name__ == '__main__':
     DoubanBooksCrawler([['71843', '工具书'], ['71840', '教材']]).run()
-    DoubanBooksCrawler([['60494', '科学'], ['62726', '科普'], ['60512', '科技'], ['62672', '数学'], ['62732', '算法'], ['62155', '编程'], ['60461', '程序'], ['62733', 'web'], ['62737', '通信'], ['60502', '互联网'], ['62739', '神经网络'], ['62738', '交互'], ['62730', '交互设计'], ['62731', '用户体验'], ['62735', 'UE'], ['62736', 'UCD']]).run()
-    DoubanBooksCrawler([['61431', '经济'], ['62713', '经济学'], ['62724', '企业史'], ['62717', '商业'], ['61640', '管理'], ['62719', '营销'], ['60497', '创业'], ['61432', '金融'], ['60493', '投资'], ['139', '理财'], ['210', '股票'], ['62722', '广告'], ['62725', '策划']]).run()
-    DoubanBooksCrawler([['61258', '人生'], ['61469', '生活'], ['67703', '思维'], ['218', '情感'], ['133', '心理'], ['60418', '心理学'], ['62212', '个人管理'], ['62711', '人际关系'], ['260', '职场'], ['60521', '励志'], ['60487', '成长'], ['61474', '教育'], ['61554', '女性'], ['60919', '两性'], ['216', '健康'], ['62704', '灵修'], ['61204', '养生'], ['60465', '美食'], ['273', '旅行'], ['62712', '自助游'], ['60534', '家居'], ['95', '手工']]).run()
-    DoubanBooksCrawler([['60403', '艺术'], ['93', '艺术史'], ['219', '建筑'], ['60460', '音乐'], ['61256', '戏剧'], ['60476', '绘画'], ['60475', '美术'], ['105', '书法'], ['60473', '设计'], ['272', '摄影'], ['60459', '电影'], ['62685', '军事']]).run()
-    DoubanBooksCrawler([['60501', '文化'], ['60489', '历史'], ['62677', '中国历史'], ['62689', '近代史'], ['62690', '考古'], ['60663', '人文'], ['62376', '传记'], ['62674', '回忆录'], ['62667', '政治'], ['62673', '政治学'], ['60552', '宗教'], ['61608', '哲学'], ['62675', '思想'], ['62072', '国学'], ['62668', '社会'], ['62664', '社会学'], ['63999', '人类学']]).run()
-    DoubanBooksCrawler([['255', '小说'], ['60454', '科幻'], ['62636', '奇幻'], ['62630', '武侠'], ['62625', '推理'], ['60979', '悬疑'], ['60443', '爱情'], ['61527', '青春'], ['62627', '言情'], ['62640', '网络小说'], ['62644', '轻小说'], ['62641', '穿越'], ['60918', '耽美'], ['60429', '漫画'], ['98', '绘本']]).run()
-    DoubanBooksCrawler([['60456', '文学'], ['62597', '外国文学'], ['62600', '中国文学'], ['62612', '古典文学'], ['62358', '经典'], ['62613', '名著'], ['254', '随笔'], ['60509', '散文'], ['61504', '诗歌'], ['62618', '诗词'], ['61747', '杂文'], ['60519', '游记']]).run()
-    # 补 ['65403', '计算机']
+    # DoubanBooksCrawler([['60494', '科学'], ['62726', '科普'], ['60512', '科技'], ['62672', '数学'], ['65403', '计算机'], ['62732', '算法'], ['62155', '编程'], ['60461', '程序'], ['62733', 'web'], ['62737', '通信'], ['60502', '互联网'], ['62739', '神经网络'], ['62738', '交互'], ['62730', '交互设计'], ['62731', '用户体验'], ['62735', 'UE'], ['62736', 'UCD']]).run()
+    # DoubanBooksCrawler([['61431', '经济'], ['62713', '经济学'], ['62724', '企业史'], ['62717', '商业'], ['61640', '管理'], ['62719', '营销'], ['60497', '创业'], ['61432', '金融'], ['60493', '投资'], ['139', '理财'], ['210', '股票'], ['62722', '广告'], ['62725', '策划']]).run()
+    # DoubanBooksCrawler([['61258', '人生'], ['61469', '生活'], ['67703', '思维'], ['218', '情感'], ['133', '心理'], ['60418', '心理学'], ['62212', '个人管理'], ['62711', '人际关系'], ['260', '职场'], ['60521', '励志'], ['60487', '成长'], ['61474', '教育'], ['61554', '女性'], ['60919', '两性'], ['216', '健康'], ['62704', '灵修'], ['61204', '养生'], ['60465', '美食'], ['273', '旅行'], ['62712', '自助游'], ['60534', '家居'], ['95', '手工']]).run()
+    # DoubanBooksCrawler([['60403', '艺术'], ['93', '艺术史'], ['219', '建筑'], ['60460', '音乐'], ['61256', '戏剧'], ['60476', '绘画'], ['60475', '美术'], ['105', '书法'], ['60473', '设计'], ['272', '摄影'], ['60459', '电影'], ['62685', '军事']]).run()
+    # DoubanBooksCrawler([['60501', '文化'], ['60489', '历史'], ['62677', '中国历史'], ['62689', '近代史'], ['62690', '考古'], ['60663', '人文'], ['62376', '传记'], ['62674', '回忆录'], ['62667', '政治'], ['62673', '政治学'], ['60552', '宗教'], ['61608', '哲学'], ['62675', '思想'], ['62072', '国学'], ['62668', '社会'], ['62664', '社会学'], ['63999', '人类学']]).run()
+    # DoubanBooksCrawler([['255', '小说'], ['60454', '科幻'], ['62636', '奇幻'], ['62630', '武侠'], ['62625', '推理'], ['60979', '悬疑'], ['60443', '爱情'], ['61527', '青春'], ['62627', '言情'], ['62640', '网络小说'], ['62644', '轻小说'], ['62641', '穿越'], ['60918', '耽美'], ['60429', '漫画'], ['98', '绘本']]).run()
+    # DoubanBooksCrawler([['60456', '文学'], ['62597', '外国文学'], ['62600', '中国文学'], ['62612', '古典文学'], ['62358', '经典'], ['62613', '名著'], ['254', '随笔'], ['60509', '散文'], ['61504', '诗歌'], ['62618', '诗词'], ['61747', '杂文'], ['60519', '游记']]).run()
 
 
 """
@@ -260,5 +321,182 @@ limit=3011&topic_id=95&topic_name=手工
 
 limit=7841&topic_id=71843&topic_name=工具书
 limit=10634&topic_id=71840&topic_name=教材
+
+"""
+
+
+
+
+
+"""为什么代理IP爬太快了也全部403???
+
+
+import sys
+import time
+import urllib.request
+import urllib.error
+import urllib.parse
+import gzip
+import numpy as np
+import redis
+import re
+from bs4 import BeautifulSoup
+from multiprocessing.dummy import Pool as ThreadPool
+from openpyxl import Workbook
+
+
+class DoubanBooksCrawler(object):
+
+    def __init__(self, topics):
+        self.topics = topics
+        self.headers = [
+            {'User-Agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:34.0) Gecko/20100101 Firefox/34.0', 'Accept-Encoding': 'gzip'},
+            {'User-Agent': 'Mozilla/5.0 (Windows; U; Windows NT 6.1; en-US; rv:1.9.1.6) Gecko/20091201 Firefox/3.5.6', 'Accept-Encoding': 'gzip'},
+            {'User-Agent': 'Mozilla/5.0 (Windows NT 6.2) AppleWebKit/535.11 (KHTML, like Gecko) Chrome/17.0.963.12 Safari/535.11', 'Accept-Encoding': 'gzip'},
+            {'User-Agent': 'Mozilla/5.0 (compatible; MSIE 10.0; Windows NT 6.2; Trident/6.0)', 'Accept-Encoding': 'gzip'},
+            {'User-Agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:40.0) Gecko/20100101 Firefox/40.0', 'Accept-Encoding': 'gzip'},
+            {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Ubuntu Chromium/44.0.2403.89 Chrome/44.0.2403.89 Safari/537.36', 'Accept-Encoding': 'gzip'}
+        ]
+        self.pool = ThreadPool(20)
+        self.count = 0
+        self.conn = redis.Redis(host='127.0.0.1', port=6379, db=0)
+        self.ip = self.conn.zrange('ipproxy:3', 0, -1)
+        self.ip = self.ip[0:(len(self.ip) - 20)]
+
+    def crawler(self, topic_id, topic_name):
+        referer = 'http://www.douban.com/tag/' + topic_name + '/?focus=book'
+        hds = [
+            {'User-Agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:34.0) Gecko/20100101 Firefox/34.0',
+             'Accept-Encoding': 'gzip, deflate, sdch', 'referer': referer, 'x-requested-with': 'XMLHttpRequest'},
+            {'User-Agent': 'Mozilla/5.0 (Windows; U; Windows NT 6.1; en-US; rv:1.9.1.6) Gecko/20091201 Firefox/3.5.6',
+             'Accept-Encoding': 'gzip, deflate, sdch', 'referer': referer, 'x-requested-with': 'XMLHttpRequest'},
+            {'User-Agent': 'Mozilla/5.0 (Windows NT 6.2) AppleWebKit/535.11 (KHTML, like Gecko) Chrome/17.0.963.12 Safari/535.11',
+             'Accept-Encoding': 'gzip, deflate, sdch', 'referer': referer, 'x-requested-with': 'XMLHttpRequest'},
+            {'User-Agent': 'Mozilla/5.0 (compatible; MSIE 10.0; Windows NT 6.2; Trident/6.0)',
+             'Accept-Encoding': 'gzip, deflate, sdch', 'referer': referer, 'x-requested-with': 'XMLHttpRequest'},
+            {'User-Agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:40.0) Gecko/20100101 Firefox/40.0',
+             'Accept-Encoding': 'gzip, deflate, sdch', 'referer': referer, 'x-requested-with': 'XMLHttpRequest'},
+            {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Ubuntu Chromium/44.0.2403.89 Chrome/44.0.2403.89 Safari/537.36',
+             'Accept-Encoding': 'gzip, deflate, sdch', 'referer': referer, 'x-requested-with': 'XMLHttpRequest'}
+        ]
+        url = 'http://www.douban.com/j/tag/items?start=0&limit=1000000&topic_id=' + topic_id + '&topic_name=' + topic_name + '&mod=book'
+        randipnum = np.random.randint(0, len(self.ip)-1)
+        proxy_ip = self.ip[randipnum].decode('utf-8')
+        proxy_support = urllib.request.ProxyHandler({'http': proxy_ip})
+        opener = urllib.request.build_opener(proxy_support)
+        urllib.request.install_opener(opener)
+        try:
+            randhds = hds[np.random.randint(0, len(hds)-1)]
+            req = urllib.request.Request(url, headers=randhds)
+            resp = urllib.request.urlopen(req)
+            try:
+                g = gzip.GzipFile(mode="rb", fileobj=resp)
+                source_code = g.read()
+            except:
+                source_code = resp.read()
+            source_code = eval(source_code.decode('utf-8', 'ignore'))
+            plain_text = str(source_code['html'])
+            total = int(source_code['total'])
+            plain_text = plain_text.replace('\\', '')
+            plain_text = plain_text.replace('\n', '')
+            list_info = re.split(r'<dl>', plain_text)[1:]
+            if list_info is None or len(list_info) <= 1:
+                print(list_info)
+            book_list = self.pool.map(self.crawler_info, list_info)
+            return book_list
+        except (urllib.error.HTTPError, urllib.error.URLError) as e:
+            print(e, topic_id, topic_name, proxy_ip)
+            plain_text = ''
+            self.conn.zrem('ipproxy:1', proxy_ip)
+            del self.ip[randipnum]
+            self.crawler(topic_id, topic_name)
+
+    def crawler_info(self, book_info):
+        soup = BeautifulSoup(book_info, 'html.parser')
+        book_url = soup.find('a').get('href')
+        title = soup.find('a', class_="title").get_text()
+        desc = soup.find('div', class_="desc").get_text()
+        desc = desc.strip(' ')
+        desc = desc.strip('\n')
+        try:
+            rating = soup.find('span', class_="rating_nums").get_text()
+        except:
+            rating = '0.0'
+        try:
+            if rating != '0.0':
+                votes = self.crawler_votes(book_url)
+                votes = votes.replace('\\xe4\\xba\\xba\\xe8\\xaf\\x84\\xe4\\xbb\\xb7', '')
+            else:
+                votes = '0'
+        except:
+            votes = '0'
+        return [title, rating, votes, desc, book_url]
+
+    def crawler_votes(self, book_url):
+        if self.count >= len(self.ip):
+            self.count = 0
+        proxy_ip = (self.ip[self.count]).decode('utf-8')
+        self.count += 1
+        try:
+            proxy_support = urllib.request.ProxyHandler({'http': proxy_ip})
+            opener = urllib.request.build_opener(proxy_support)
+            urllib.request.install_opener(opener)
+            req = urllib.request.Request(book_url, headers=self.headers[np.random.randint(0, len(self.headers) - 1)])
+            resp = urllib.request.urlopen(req)
+            try:
+                g = gzip.GzipFile(mode="rb", fileobj=resp)
+                source_code = g.read()
+            except:
+                source_code = resp.read()
+            plain_text = str(source_code)
+            soup = BeautifulSoup(plain_text, 'html.parser')
+            votes = soup.find(id="interest_sectl").find('a', class_="rating_people").get_text()
+            return votes
+        except (urllib.error.HTTPError, urllib.error.URLError) as e:
+            if e.code != 404:
+                print(e, book_url, 'fail ip: %s' % proxy_ip)
+                self.conn.zrem('ipproxy:1', proxy_ip)
+                del self.ip[self.count - 1]
+                self.crawler_votes(book_url)
+            else:
+                print(e, book_url)
+
+    def run(self):
+        sorted_book_lists = []
+        for topic in self.topics:
+            topic_id, topic_name = topic
+            book_list = self.crawler(topic_id, urllib.parse.quote(topic_name))
+            book_list = sorted(book_list, key=lambda x: (float(x[1]), int(x[2])), reverse=True)
+            sorted_book_lists.append(book_list)
+        tags = [topic[1] for topic in self.topics]
+        self.insert_to_excel(sorted_book_lists, tags)
+        print('Finish!!!')
+
+    def insert_to_excel(self, results, tags):
+        wb = Workbook(optimized_write=True)
+        ws = []
+        for i in range(len(tags)):
+            ws.append(wb.create_sheet(title=tags[i]))
+        for i in range(len(tags)):
+            ws[i].append(['序号', '书名', '评分', '评价人数', '作者/译者/出版社/出版时间/价格', '链接'])
+            count = 1
+            for book_list in results[i]:
+                ws[i].append([count, book_list[0], float(book_list[1]), int(book_list[2]), book_list[3], book_list[4]])
+                count += 1
+        save_path = 'book_lists'
+        for i in range(len(tags)):
+            save_path += ('-' + tags[i])
+        save_path += '.xlsx'
+        wb.save(save_path)
+
+if __name__ == '__main__':
+    # DoubanBooksCrawler([['71843', '工具书'], ['71840', '教材']]).run()
+    # DoubanBooksCrawler([['60494', '科学'], ['62726', '科普'], ['60512', '科技'], ['62672', '数学'], ['65403', '计算机'], ['62732', '算法'], ['62155', '编程'], ['60461', '程序'], ['62733', 'web'], ['62737', '通信'], ['60502', '互联网'], ['62739', '神经网络'], ['62738', '交互'], ['62730', '交互设计'], ['62731', '用户体验'], ['62735', 'UE'], ['62736', 'UCD']]).run()
+    DoubanBooksCrawler([['61431', '经济'], ['62713', '经济学'], ['62724', '企业史'], ['62717', '商业'], ['61640', '管理'], ['62719', '营销'], ['60497', '创业'], ['61432', '金融'], ['60493', '投资'], ['139', '理财'], ['210', '股票'], ['62722', '广告'], ['62725', '策划']]).run()
+    DoubanBooksCrawler([['61258', '人生'], ['61469', '生活'], ['67703', '思维'], ['218', '情感'], ['133', '心理'], ['60418', '心理学'], ['62212', '个人管理'], ['62711', '人际关系'], ['260', '职场'], ['60521', '励志'], ['60487', '成长'], ['61474', '教育'], ['61554', '女性'], ['60919', '两性'], ['216', '健康'], ['62704', '灵修'], ['61204', '养生'], ['60465', '美食'], ['273', '旅行'], ['62712', '自助游'], ['60534', '家居'], ['95', '手工']]).run()
+    DoubanBooksCrawler([['60403', '艺术'], ['93', '艺术史'], ['219', '建筑'], ['60460', '音乐'], ['61256', '戏剧'], ['60476', '绘画'], ['60475', '美术'], ['105', '书法'], ['60473', '设计'], ['272', '摄影'], ['60459', '电影'], ['62685', '军事']]).run()
+    DoubanBooksCrawler([['60501', '文化'], ['60489', '历史'], ['62677', '中国历史'], ['62689', '近代史'], ['62690', '考古'], ['60663', '人文'], ['62376', '传记'], ['62674', '回忆录'], ['62667', '政治'], ['62673', '政治学'], ['60552', '宗教'], ['61608', '哲学'], ['62675', '思想'], ['62072', '国学'], ['62668', '社会'], ['62664', '社会学'], ['63999', '人类学']]).run()
+    DoubanBooksCrawler([['255', '小说'], ['60454', '科幻'], ['62636', '奇幻'], ['62630', '武侠'], ['62625', '推理'], ['60979', '悬疑'], ['60443', '爱情'], ['61527', '青春'], ['62627', '言情'], ['62640', '网络小说'], ['62644', '轻小说'], ['62641', '穿越'], ['60918', '耽美'], ['60429', '漫画'], ['98', '绘本']]).run()
+    DoubanBooksCrawler([['60456', '文学'], ['62597', '外国文学'], ['62600', '中国文学'], ['62612', '古典文学'], ['62358', '经典'], ['62613', '名著'], ['254', '随笔'], ['60509', '散文'], ['61504', '诗歌'], ['62618', '诗词'], ['61747', '杂文'], ['60519', '游记']]).run()
 
 """

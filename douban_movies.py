@@ -17,6 +17,7 @@ import re
 from bs4 import BeautifulSoup
 from multiprocessing.dummy import Pool as ThreadPool
 from openpyxl import Workbook
+from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
 
 
 class DoubanMoviesCrawler(object):
@@ -32,7 +33,7 @@ class DoubanMoviesCrawler(object):
         ]
 
     def crawler(self, topic_id, topic_name):
-        url = 'http://www.douban.com/j/tag/items?start=0&limit=1000000&topic_id=' + topic_id + '&topic_name=' + topic_name + '&mod=movie'
+        url = 'http://www.douban.com/j/tag/items?start=0&limit=500&topic_id=' + topic_id + '&topic_name=' + topic_name + '&mod=movie'
         movie_list = []
         try:
             randhds = self.headers[np.random.randint(0, len(self.headers)-1)]
@@ -49,18 +50,18 @@ class DoubanMoviesCrawler(object):
             plain_text = plain_text.replace('\\', '')
             plain_text = plain_text.replace('\n', '')
         except (urllib.error.HTTPError, urllib.error.URLError) as e:
-            print(e)
+            print(e, url)
             plain_text = ''
+            total = 0
 
         list_info = re.split(r'<dl>', plain_text)[1:]
 
-        if list_info is None or len(list_info) <= 1:
-            print(list_info)
-            sys.exit(0)
+        if list_info is None:
+            print('no result', url)
 
         for movie_info in list_info:
             soup = BeautifulSoup(movie_info, 'html.parser')
-            movie_url = soup.find('a').get('href')
+            movie_url = soup.find('a').get('href').replace('https', 'http')
             title = soup.find('a', class_="title").get_text()
             desc = soup.find('div', class_="desc").get_text()
             desc = desc.strip(' ')
@@ -88,8 +89,68 @@ class DoubanMoviesCrawler(object):
             movie_list.append([title, rating, votes, desc, movie_url])
             if not self.exist_file('images/movies', title + '1.jpg'):
                 self.crawler_images(movie_url, title, limit)
+
+        if total >= 500:
+            for i in range(1, int(total/500) + 1):
+                time.sleep(np.random.rand()*5)
+                url = 'http://www.douban.com/j/tag/items?start=' + str(i * 500) + '&limit=500&topic_id=' + topic_id + '&topic_name=' + topic_name + '&mod=movie'
+                try:
+                    randhds = self.headers[np.random.randint(0, len(self.headers)-1)]
+                    req = urllib.request.Request(url, headers=randhds)
+                    resp = urllib.request.urlopen(req)
+                    try:
+                        g = gzip.GzipFile(mode="rb", fileobj=resp)
+                        source_code = g.read()
+                    except:
+                        source_code = resp.read()
+                    if '{' in source_code.decode('utf-8', 'ignore'):
+                        source_code = eval(source_code.decode('utf-8', 'ignore'))
+                    else:
+                        source_code = eval('{"' + source_code.decode('utf-8', 'ignore'))
+                    plain_text = str(source_code['html'])
+                    plain_text = plain_text.replace('\\', '')
+                    plain_text = plain_text.replace('\n', '')
+                except (urllib.error.HTTPError, urllib.error.URLError) as e:
+                    print(e, url)
+                    plain_text = ''
+
+                list_info = re.split(r'<dl>', plain_text)[1:]
+
+                if list_info is None:
+                    print('no result', url)
+
+                for movie_info in list_info:
+                    soup = BeautifulSoup(movie_info, 'html.parser')
+                    movie_url = soup.find('a').get('href').replace('https', 'http')
+                    title = soup.find('a', class_="title").get_text()
+                    desc = soup.find('div', class_="desc").get_text()
+                    desc = desc.strip(' ')
+                    desc = desc.strip('\n')
+                    try:
+                        rating = soup.find('span', class_="rating_nums").get_text()
+                    except:
+                        rating = '0.0'
+                    try:
+                        if rating != '0.0':
+                            votes = self.crawler_votes(movie_url)
+                            votes = votes.replace('\\xe4\\xba\\xba\\xe8\\xaf\\x84\\xe4\\xbb\\xb7', '')
+                        else:
+                            votes = '0'
+                    except:
+                        votes = '0'
+                    if int(votes) >= 10000:
+                        limit = 20
+                    elif 1000 <= int(votes) < 10000:
+                        limit = 10
+                    elif 500 <= int(votes) < 1000:
+                        limit = 5
+                    else:
+                        limit = 0
+                    movie_list.append([title, rating, votes, desc, movie_url])
+                    if not self.exist_file('images/movies', title + '1.jpg'):
+                        self.crawler_images(movie_url, title, limit)
         return movie_list
-    
+
     def crawler_votes(self, movie_url):
         time.sleep(np.random.rand()*5)
         try:
@@ -109,6 +170,7 @@ class DoubanMoviesCrawler(object):
         return votes
 
     def crawler_images(self, movie_url, title, limit):
+        time.sleep(np.random.rand()*5)
         if limit != 0:
             # http://movie.douban.com/subject/25897313/all_photos
             all_img_url = movie_url.replace('?from=tag', 'all_photos')
@@ -126,17 +188,20 @@ class DoubanMoviesCrawler(object):
                 print(e, all_img_url)
                 plain_text = ''
             soup = BeautifulSoup(plain_text, 'html.parser')
-            soup_results = soup.find('div', class_='mod').find('ul', class_='pic-col5').find_all('img', limit=limit)
-            img_urls = []
-            for link in soup_results:
-                img_urls.append(link.get('src'))
-            # http://img1.doubanio.com/view/photo/photo/public/p2194607728.jpg
-            i = 1
-            for img_url in img_urls:
-                image_url = img_url.replace('https', 'http').replace('albumicon', 'photo')
-                image_name = title + str(i) + '.jpg'
-                i += 1
-                self.crawler_image(image_url, image_name)
+            try:
+                soup_results = soup.find('div', class_='mod').find('ul', class_='pic-col5').find_all('img', limit=limit)
+                img_urls = []
+                for link in soup_results:
+                    img_urls.append(link.get('src'))
+                # http://img1.doubanio.com/view/photo/photo/public/p2194607728.jpg
+                i = 1
+                for img_url in img_urls:
+                    image_url = img_url.replace('https', 'http').replace('albumicon', 'photo')
+                    image_name = title + str(i) + '.jpg'
+                    i += 1
+                    self.crawler_image(image_url, image_name)
+            except:
+                pass
         else:
             pass
 
@@ -169,9 +234,20 @@ class DoubanMoviesCrawler(object):
         for i in range(len(tags)):
             ws[i].append(['序号', '电影名', '评分', '评价人数', '制片地区/类型/上映年份/导演/主演', '链接'])
             count = 1
-            for movie_list in results[i]:
-                ws[i].append([count, movie_list[0], float(movie_list[1]), int(movie_list[2]), movie_list[3], movie_list[4]])
-                count += 1
+            for movielist in results[i]:
+                try:
+                    movie_list = []
+                    for each in movielist:
+                        each = ILLEGAL_CHARACTERS_RE.sub(r'', each)
+                        movie_list.append(each)
+                    if movie_list:
+                        ws[i].append([count, movie_list[0], float(movie_list[1]), int(movie_list[2]), movie_list[3], movie_list[4]])
+                        count += 1
+                    else:
+                        print('Fail to save i:', i, movie_list)
+                except:
+                    print('Fail to save i:', i, movielist)
+                    pass
         save_path = 'movie_lists'
         for i in range(len(tags)):
             save_path += ('-' + tags[i])
@@ -185,16 +261,15 @@ class DoubanMoviesCrawler(object):
         return None
 
 if __name__ == '__main__':
-    # DoubanMoviesCrawler([['76168', '吉濑美智子']]).run()
-    DoubanMoviesCrawler([['73551', '1936'], ['73808', '1935'], ['73956', '1934'], ['73720', '1933'], ['74519', '1932'], ['73917', '1931'], ['70304', '1930'], ['73726', '1929'], ['74226', '1928'], ['74046', '1927'], ['73907', '1926'], ['74349', '1925'], ['74686', '1924'], ['76079', '1923'], ['74685', '1922'], ['74464', '1921'], ['73461', '1920'], ['75146', '1919'], ['78678', '1918'], ['78679', '1917'], ['77850', '1916'], ['75543', '1915'], ['75069', '1914'], ['77405', '1913'], ['77214', '1912'], ['79944', '1911'], ['75113', '1910'], ['74477', '1900']]).run()
-    DoubanMoviesCrawler([['72823', '1976'], ['72864', '1975'], ['72830', '1974'], ['72802', '1973'], ['73120', '1972'], ['72762', '1971'], ['72718', '1970'], ['72986', '1969'], ['72822', '1968'], ['72727', '1967'], ['72740', '1966'], ['72925', '1965'], ['72808', '1964'], ['73150', '1963'], ['72825', '1962'], ['72990', '1961'], ['72763', '1960'], ['73207', '1959'], ['73156', '1958'], ['72922', '1957'], ['72894', '1956'], ['73095', '1955'], ['73134', '1954'], ['73197', '1953'], ['72800', '1952'], ['73107', '1951'], ['73019', '1950'], ['73262', '1949'], ['73335', '1948'], ['73228', '1947'], ['73585', '1946'], ['73522', '1945'], ['73989', '1944'], ['74036', '1943'], ['73789', '1942'], ['73739', '1941'], ['73388', '1940'], ['73825', '1939'], ['74377', '1938'], ['73604', '1937']]).run()
-    DoubanMoviesCrawler([['73160', '2016'], ['65330', '2015'], ['256', '2014'], ['257', '2013'], ['71847', '2012'], ['71850', '2011'], ['71868', '2010'], ['71939', '2009'], ['72005', '2008'], ['72010', '2007'], ['72014', '2006'], ['72020', '2005'], ['72019', '2004'], ['72025', '2003'], ['72030', '2002'], ['72029', '2001'], ['72037', '2000'], ['72040', '1999'], ['72044', '1998'], ['72038', '1997'], ['72073', '1996'], ['72056', '1995'], ['72035', '1994'], ['72081', '1993'], ['72093', '1992'], ['72138', '1991'], ['72117', '1990'], ['72668', '1989'], ['72673', '1988'], ['72715', '1987'], ['72682', '1986'], ['63701', '1985'], ['72704', '1984'], ['72818', '1983'], ['72739', '1982'], ['72747', '1981'], ['72716', '1980'], ['72948', '1979'], ['72858', '1978'], ['72784', '1977']]).run()
-    DoubanMoviesCrawler([['60570', '电视剧'], ['220', '日剧'], ['72047', '日剧SP'], ['60445', '美剧'], ['61457', '英剧'], ['60444', '韩剧'], ['63560', '国产剧'], ['65928', '港剧'], ['65388', 'TVB'], ['66926', '台剧'], ['65900', '泰剧']]).run()
-    DoubanMoviesCrawler([['62356', '动画'], ['72053', '动画电影'], ['60407', '动漫'], ['71701', '日本动画'], ['72050', 'OVA'], ['72016', '剧场版'], ['62374', '动画短片'], ['72008', '漫画改编']]).run()
-    DoubanMoviesCrawler([['133', '心理'], ['61258', '人生'], ['61554', '女性'], ['61738', '家庭'], ['61469', '生活'], ['60406', '时尚'], ['60465', '美食'], ['71849', '人性'], ['62668', '社会'], ['62667', '政治'], ['60552', '宗教'], ['62371', '战争'], ['67674', '灾难'], ['62376', '传记'], ['60334', '纪录片'], ['62370', '短片'], ['66928', '综艺']]).run()
-    DoubanMoviesCrawler([['61870', '冒险'], ['70228', '西部'], ['66201', '公路'], ['273', '旅行'], ['60434', '文艺'], ['72027', '歌舞'], ['60460', '音乐'], ['218', '情感'], ['60521', '励志'], ['60515', '梦想'], ['65937', '感动'], ['62377', '感人'], ['62227', '温暖'], ['66081', '温情'], ['60443', '爱情'], ['62383', '浪漫'], ['62800', '友情'], ['61527', '青春'], ['62258', '校园'], ['62221', '童年'], ['62387', '童话']]).run()
-    DoubanMoviesCrawler([['62359', '剧情'], ['60454', '科幻'], ['62386', '史诗'], ['62636', '奇幻'], ['62372', '魔幻'], ['65318', '古装'], ['62375', '情色'], ['62849', 'les'], ['62381', '同志'], ['72022', '伦理'], ['62355', '喜剧'], ['209', '搞笑'], ['62360', '动作'], ['62364', '犯罪'], ['62363', '惊悚'], ['60979', '悬疑'], ['62369', '恐怖'], ['62389', 'cult'], ['62378', '暴力'], ['70686', '血腥'], ['62382', '黑帮'], ['61810', '黑色幽默']]).run()
-
+    DoubanMoviesCrawler([['76168', '吉濑美智子'], ['72704', '1984']]).run()
+    # DoubanMoviesCrawler([['62356', '动画'], ['72053', '动画电影'], ['60407', '动漫'], ['71701', '日本动画'], ['72050', 'OVA'], ['72016', '剧场版'], ['62374', '动画短片'], ['72008', '漫画改编']]).run()
+    # DoubanMoviesCrawler([['60570', '电视剧'], ['220', '日剧'], ['72047', '日剧SP'], ['60445', '美剧'], ['61457', '英剧'], ['60444', '韩剧'], ['63560', '国产剧'], ['65928', '港剧'], ['65388', 'TVB'], ['66926', '台剧'], ['65900', '泰剧']]).run()
+    # DoubanMoviesCrawler([['133', '心理'], ['61258', '人生'], ['61554', '女性'], ['61738', '家庭'], ['61469', '生活'], ['60406', '时尚'], ['60465', '美食'], ['71849', '人性'], ['62668', '社会'], ['62667', '政治'], ['60552', '宗教'], ['62371', '战争'], ['67674', '灾难'], ['62376', '传记'], ['60334', '纪录片'], ['62370', '短片'], ['66928', '综艺']]).run()
+    # DoubanMoviesCrawler([['61870', '冒险'], ['70228', '西部'], ['66201', '公路'], ['273', '旅行'], ['60434', '文艺'], ['72027', '歌舞'], ['60460', '音乐'], ['218', '情感'], ['60521', '励志'], ['60515', '梦想'], ['65937', '感动'], ['62377', '感人'], ['62227', '温暖'], ['66081', '温情'], ['60443', '爱情'], ['62383', '浪漫'], ['62800', '友情'], ['61527', '青春'], ['62258', '校园'], ['62221', '童年'], ['62387', '童话']]).run()
+    # DoubanMoviesCrawler([['62359', '剧情'], ['60454', '科幻'], ['62386', '史诗'], ['62636', '奇幻'], ['62372', '魔幻'], ['65318', '古装'], ['62375', '情色'], ['62849', 'les'], ['62381', '同志'], ['72022', '伦理'], ['62355', '喜剧'], ['209', '搞笑'], ['62360', '动作'], ['62364', '犯罪'], ['62363', '惊悚'], ['60979', '悬疑'], ['62369', '恐怖'], ['62389', 'cult'], ['62378', '暴力'], ['70686', '血腥'], ['62382', '黑帮'], ['61810', '黑色幽默']]).run()
+    # DoubanMoviesCrawler([['73551', '1936'], ['73808', '1935'], ['73956', '1934'], ['73720', '1933'], ['74519', '1932'], ['73917', '1931'], ['70304', '1930'], ['73726', '1929'], ['74226', '1928'], ['74046', '1927'], ['73907', '1926'], ['74349', '1925'], ['74686', '1924'], ['76079', '1923'], ['74685', '1922'], ['74464', '1921'], ['73461', '1920'], ['75146', '1919'], ['78678', '1918'], ['78679', '1917'], ['77850', '1916'], ['75543', '1915'], ['75069', '1914'], ['77405', '1913'], ['77214', '1912'], ['79944', '1911'], ['75113', '1910'], ['74477', '1900']]).run()
+    # DoubanMoviesCrawler([['72823', '1976'], ['72864', '1975'], ['72830', '1974'], ['72802', '1973'], ['73120', '1972'], ['72762', '1971'], ['72718', '1970'], ['72986', '1969'], ['72822', '1968'], ['72727', '1967'], ['72740', '1966'], ['72925', '1965'], ['72808', '1964'], ['73150', '1963'], ['72825', '1962'], ['72990', '1961'], ['72763', '1960'], ['73207', '1959'], ['73156', '1958'], ['72922', '1957'], ['72894', '1956'], ['73095', '1955'], ['73134', '1954'], ['73197', '1953'], ['72800', '1952'], ['73107', '1951'], ['73019', '1950'], ['73262', '1949'], ['73335', '1948'], ['73228', '1947'], ['73585', '1946'], ['73522', '1945'], ['73989', '1944'], ['74036', '1943'], ['73789', '1942'], ['73739', '1941'], ['73388', '1940'], ['73825', '1939'], ['74377', '1938'], ['73604', '1937']]).run()
+    # DoubanMoviesCrawler([['73160', '2016'], ['65330', '2015'], ['256', '2014'], ['257', '2013'], ['71847', '2012'], ['71850', '2011'], ['71868', '2010'], ['71939', '2009'], ['72005', '2008'], ['72010', '2007'], ['72014', '2006'], ['72020', '2005'], ['72019', '2004'], ['72025', '2003'], ['72030', '2002'], ['72029', '2001'], ['72037', '2000'], ['72040', '1999'], ['72044', '1998'], ['72038', '1997'], ['72073', '1996'], ['72056', '1995'], ['72035', '1994'], ['72081', '1993'], ['72093', '1992'], ['72138', '1991'], ['72117', '1990'], ['72668', '1989'], ['72673', '1988'], ['72715', '1987'], ['72682', '1986'], ['63701', '1985'], ['72704', '1984'], ['72818', '1983'], ['72739', '1982'], ['72747', '1981'], ['72716', '1980'], ['72948', '1979'], ['72858', '1978'], ['72784', '1977']]).run()
 
 
 """

@@ -21,7 +21,7 @@ from multiprocessing.dummy import Pool as ThreadPool
 from openpyxl import Workbook
 
 class DoubanCelebritiesCrawler(object):
-    def __init__(self, total):
+    def __init__(self, start, end):
         self.headers = [
             {'User-Agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:34.0) Gecko/20100101 Firefox/34.0', 'Accept-Encoding': 'gzip'},
             {'User-Agent': 'Mozilla/5.0 (Windows; U; Windows NT 6.1; en-US; rv:1.9.1.6) Gecko/20091201 Firefox/3.5.6', 'Accept-Encoding': 'gzip'},
@@ -30,12 +30,13 @@ class DoubanCelebritiesCrawler(object):
             {'User-Agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:40.0) Gecko/20100101 Firefox/40.0', 'Accept-Encoding': 'gzip'},
             {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Ubuntu Chromium/44.0.2403.89 Chrome/44.0.2403.89 Safari/537.36', 'Accept-Encoding': 'gzip'}
         ]
-        self.total = total
+        self.start = start
+        self.end = end
 
     def crawler_images(self):
-        for i in range(0, self.total + 1):
+        for i in range(self.start, self.end + 1):
             time.sleep(np.random.rand()*5)
-            celebrity_url = 'http://movie.douban.com/celebrity/1' + str(i) + '/'
+            celebrity_url = 'http://movie.douban.com/celebrity/' + str(i) + '/'
             try:
                 req = urllib.request.Request(celebrity_url, headers=self.headers[np.random.randint(0, len(self.headers) - 1)])
                 resp = urllib.request.urlopen(req)
@@ -46,54 +47,57 @@ class DoubanCelebritiesCrawler(object):
                     source_code = resp.read()
                 plain_text = str(source_code.decode('utf-8', 'ignore'))
             except (urllib.error.HTTPError, urllib.error.URLError) as e:
-                print(e, celebrity_urll)
+                print(e, celebrity_url)
                 plain_text = ''
             soup = BeautifulSoup(plain_text, 'html.parser')
-            info = soup.find('div', class_='item').find('div', class_='info')
-            sex = info.find('li').get_text()
-            if '女' in sex:
-                fans = int(soup.find(id='fans').get_text().replace('\n', '').replace(' ', '').split('（')[1].split('）')[0])
-                if fans >= 100:
-                    if fans >= 1000:
-                        limit = 40
-                    elif fans >= 500:
-                        limit = 20
-                    else:
-                        limit = 10
-                    name = soup.find('div', class_='item').find('a', class_='nbg').get('title')
-                    birthday = info.find_next('li').find_next('li').find_next('li').get_text().replace('\n', '').replace(' ', '').split(':')[1]
-                    country = info.find_next('li').find_next('li').find_next('li').find_next('li').get_text().replace('\n', '').replace(' ', '').split(':')[1]
+            try:
+                info = soup.find('div', class_='item').find('div', class_='info')
+                sex = info.find('li').get_text()
+                if '女' in sex:
+                    fans = int(soup.find(id='fans').get_text().replace('\n', '').replace(' ', '').split('（')[1].split('）')[0])
+                    if fans >= 100:
+                        if fans >= 1000:
+                            limit = 40
+                        elif fans >= 500:
+                            limit = 20
+                        else:
+                            limit = 10
+                        name = soup.find('div', class_='item').find('a', class_='nbg').get('title')
+                        birthday = info.find_next('li').find_next('li').find_next('li').get_text().replace('\n', '').replace(' ', '').split(':')[1]
+                        country = info.find_next('li').find_next('li').find_next('li').find_next('li').get_text().replace('\n', '').replace(' ', '').split(':')[1]
 
-                    time.sleep(np.random.rand()*5)
-                    all_img_url = 'https://movie.douban.com/celebrity/1' + str(i) + '/photos/'
-                    try:
-                        req = urllib.request.Request(all_img_url, headers=self.headers[np.random.randint(0, len(self.headers) - 1)])
-                        resp = urllib.request.urlopen(req)
+                        time.sleep(np.random.rand()*5)
+                        all_img_url = 'https://movie.douban.com/celebrity/' + str(i) + '/photos/'
                         try:
-                            g = gzip.GzipFile(mode="rb", fileobj=resp)
-                            source_code = g.read()
-                        except:
-                            source_code = resp.read()
-                        plain_text = str(source_code.decode('utf-8', 'ignore'))
-                    except (urllib.error.HTTPError, urllib.error.URLError) as e:
-                        print(e, all_img_url)
-                        plain_text = ''
-                    soup = BeautifulSoup(plain_text, 'html.parser')
-                    soup_results = soup.find(id='wrapper').find('ul', class_='poster-col4 clearfix').find_all('img', limit=limit)
-                    img_urls = []
-                    for link in soup_results:
-                        img_urls.append(link.get('src'))
+                            req = urllib.request.Request(all_img_url, headers=self.headers[np.random.randint(0, len(self.headers) - 1)])
+                            resp = urllib.request.urlopen(req)
+                            try:
+                                g = gzip.GzipFile(mode="rb", fileobj=resp)
+                                source_code = g.read()
+                            except:
+                                source_code = resp.read()
+                            plain_text = str(source_code.decode('utf-8', 'ignore'))
+                        except (urllib.error.HTTPError, urllib.error.URLError) as e:
+                            print(e, all_img_url)
+                            plain_text = ''
+                        soup = BeautifulSoup(plain_text, 'html.parser')
+                        soup_results = soup.find(id='wrapper').find('ul', class_='poster-col4 clearfix').find_all('img', limit=limit)
+                        img_urls = []
+                        for link in soup_results:
+                            img_urls.append(link.get('src'))
 
-                    k = 1
-                    for img_url in img_urls:
-                        image_url = img_url.replace('https', 'http').replace('thumb', 'photo')
-                        image_name = name + ' ' + birthday + ' ' + country + ' (' + str(k) + ').jpg'
-                        k += 1
-                        self.crawler_image(image_url, image_name)
+                        k = 1
+                        for img_url in img_urls:
+                            image_url = img_url.replace('https', 'http').replace('thumb', 'photo')
+                            image_name = name + ' ' + birthday + ' ' + country + ' (' + str(k) + ').jpg'
+                            k += 1
+                            self.crawler_image(image_url, image_name)
+                    else:
+                        pass
                 else:
                     pass
-            else:
-                pass
+            except:
+                print(celebrity_url)
 
     def crawler_image(self, image_url, image_name):
         time.sleep(np.random.rand()*5)
@@ -106,7 +110,8 @@ class DoubanCelebritiesCrawler(object):
             print(e, image_url)
 
 if __name__ == '__main__':
-    DoubanCelebritiesCrawler(355450).crawler_images()
+    DoubanCelebritiesCrawler(1349808, 1355450).crawler_images()
+
 
 """http://movie.douban.com/celebrity/1000000/"""
 """http://movie.douban.com/celebrity/1355450/"""
